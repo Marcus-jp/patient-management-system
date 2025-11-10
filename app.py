@@ -1,35 +1,43 @@
-# app.py
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, redirect
+from flask_sqlalchemy import SQLAlchemy
+import os
 
 app = Flask(__name__)
 
-# In-memory patient storage
-patients = []
+# Database setup
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'patients.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+db = SQLAlchemy(app)
+
+# Patient model
+class Patient(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    age = db.Column(db.Integer, nullable=False)
+    symptoms = db.Column(db.String(200), nullable=False)
+
+# Routes
 @app.route('/')
-def home():
-    return "Welcome to the Patient Management System!"
+def index():
+    patients = Patient.query.all()
+    return render_template('index.html', patients=patients)
 
-# Get all patients
-@app.route('/patients', methods=['GET'])
-def get_patients():
-    return jsonify(patients)
-
-# Add a new patient
-@app.route('/patients', methods=['POST'])
+@app.route('/add', methods=['POST'])
 def add_patient():
-    data = request.get_json()
-    if not data.get("name") or not data.get("age") or not data.get("symptoms"):
-        return jsonify({"error": "Missing patient information"}), 400
-    patients.append(data)
-    return jsonify({"message": "Patient added successfully"}), 201
+    name = request.form.get('name')
+    age = request.form.get('age')
+    symptoms = request.form.get('symptoms')
+    if name and age and symptoms:
+        patient = Patient(name=name, age=int(age), symptoms=symptoms)
+        db.session.add(patient)
+        db.session.commit()
+    return redirect('/')
 
-# Get a single patient by index
-@app.route('/patients/<int:index>', methods=['GET'])
-def get_patient(index):
-    if 0 <= index < len(patients):
-        return jsonify(patients[index])
-    return jsonify({"error": "Patient not found"}), 404
+# Create database tables if not exist
+with app.app_context():
+    db.create_all()
 
 if __name__ == '__main__':
     app.run(debug=True)
